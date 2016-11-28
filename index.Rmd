@@ -17,14 +17,15 @@ Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activ
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 trainingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 testingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
-download.file(trainingUrl, destfile="pml-training.csv",method="curl")
-download.file(testingUrl, destfile="pml-testing.csv",method="curl")
-complete.data <- read.csv("pml-training.csv"); partial.data <- read.csv("pml-testing.csv")
+download.file(trainingUrl, destfile="pml-training.csv", method="curl")
+download.file(testingUrl, destfile="pml-testing.csv", method="curl")
+complete.data <- read.csv("pml-training.csv");
+partial.data <- read.csv("pml-testing.csv")
 library(ggplot2); library(caret); library(rpart)
 library(rattle); library(randomForest)
 ```
 
-The 2 first 159 columns of the 2 data.frames `complete.data` and `partial.data` are equal. 
+`complete.data` has 19622 rows and 160 columns, while `partial.data` has 20 rows and 160 columns. The first 159 columns of the 2 data.frames are equal. 
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 all.equal(names(complete.data[,-160]),names(partial.data[,-160]))
@@ -32,24 +33,30 @@ all.equal(names(complete.data[,-160]),names(partial.data[,-160]))
 
 The last column (160-th column):
 
-- (in the case of `complete.data`) is given by a column `classe` containing an integer between 1 and 5, associated to a class of exercise between "A" and "E"
-- (in the case of `partial.data`) is given by a column `problem_id` simply repeating the names of the rows (i.e. the integers from 1 to 20), so it does not provide any useful info.
+- in the case of `complete.data` is given by a column `classe` containing an integer between 1 and 5, associated to a class of exercise between "A" and "E",
+- in the case of `partial.data` is given by a column `problem_id` simply repeating the names of the rows (i.e. the integers from 1 to 20), so it does not provide any useful info.
 
 ## Preliminary analysis and preprocess of the data
 
-Looking at the data, it seems that the first column (called `X`), is simply a (progressive) number for the various measurements that were taken. So it should not be considered in our analysis.
+Looking at the data, it seems that the first column (called `X`), is simply a (progressive) number for the various observations that were taken during the experiment. So we will omit it in our analysis.
 
-In a real situation (when our analysis is supposed to be used in order to provide suggestions to a **new** user), we certainly want to extract general characteristics from the data, not depending on the 6 user that perfomed the activity during the test, therefore we should remove the column `user_name` from our analysis.
+In a real situation (when our analysis is supposed to be used in order to provide fitness suggestions to a **new** user), we certainly want to extract general characteristics from the data, not depending on the 6 user that perfomed the activity during the test, therefore we should remove the column `user_name` from our analysis.
 
 However, since the final aim of the present project is to predict the class of the activity on a set with the same 6 users (and since there is enough data for each user in `complete.data`), then we can take advantage of knowing the identity of the user. This is shown below:
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 list.users <- unique(complete.data$user_name); print(as.character(sort(list.users)))
 print(as.character(sort(unique(partial.data$user_name))))
-sapply(seq_along(list.users), function(i) sum(complete.data$user_name == list.users[i]))
 ```
 
-Since there are only (exactly the same) 6 users both in `complete.data` and in `partial.data`, we can take full advantage of this fact by dividing our sets into 6 subsets, and using machine learning on each of these subset individually.
+This is the quantity of observation for each user:
+
+```{r, cache = TRUE, echo = TRUE, message = FALSE}
+sapply(seq_along(list.users), function(i) 
+  paste(list.users[i], " = ", sum(complete.data$user_name == list.users[i]), sep = ""))
+```
+
+We can take full advantage of this fact by dividing `complete.data` into 6 subsets accordind to the various users, and using machine learning on each of these subset individually.
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 list.complete <- list()
@@ -57,20 +64,20 @@ for(i in seq_along(list.users))
   list.complete[[i]] <- complete.data[complete.data$user_name == list.users[i],]
 ```
 
-Moreover, we want to split `complete.data` into training/validating/test sets with percentages 60/20/20. So we proceed as follows:
+Moreover, we want to split `complete.data` into training/validating/testing sets with percentages 60/20/20 (for each user separately). So we proceed as follows:
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 set.seed(12345)
-list.training <- list(); list.validating <- list(); list.testing <- list()
-for(i in seq_along(list.users)){
-  # % 60% of the data are used for the training set
+list.training <- list();   list.validating <- list();   list.testing <- list()
+for(i in seq_along(list.users)){   # Cycle over the 6 users.
+  # % 60% of the data are used for the training set.
   inTrain <- createDataPartition(y=list.complete[[i]]$classe, p = 0.60)[[1]]
   list.training[[i]] <- list.complete[[i]][inTrain,]
-  # half of the remaining data (i.e. 20% of the total) are used for validating
+  # Half of the remaining data (i.e. 20% of the total) are used for validating.
   temp <- list.complete[[i]][-inTrain,]
   inValidate <- createDataPartition(y=temp$classe, p = 0.50)[[1]]
   list.validating[[i]] <- temp[inValidate,]
-  # The remaining 20% is used for testing the model
+  # The remaining 20% is used for testing the model.
   list.testing[[i]] <- temp[-inValidate,]
 }
 ```
@@ -78,51 +85,57 @@ for(i in seq_along(list.users)){
 As a check, we print the dimensions of the various training and validating sets:
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
-for(i in seq_along(list.users)){
+for(i in seq_along(list.users)){   # Cycle over the 6 users.
   print(paste(list.users[i], " = ", dim(list.training[[i]])[1], ", ",
               dim(list.validating[[i]])[1], ", ", dim(list.testing[[i]])[1], sep = ""))
 }
 ```
 
-A preliminary analysis shows that each training and validating set has lots of NA values.
-We opt for removing all the columns where more than half of the column is composed of NAs.
+A preliminary analysis shows that each training set has lots of NA values, missing values and "#DIV/0!" values, so we opt for removing all the columns where more than half of the column is composed of such cells.
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 # This chunk of code takes around 2 minutes to execute on a laptop.
 # In order to use the same columns both in training/validating/testing, we have to keep
 # track of the variables that we select (for each user separately). These are saved in the
-# following list (contaning 6 vector of variables):
+# following list (contaning a vector of "good" variables for each of the 6 users):
 list.variables <- list();
-for(i in seq_along(list.users)){
+for(i in seq_along(list.users)){   # Cycle over the 6 users.
   # Counts how many empty cells or "#DIV/0!" cells or "NA" cells there are in each column.
-  d1 <- dim(list.training[[i]])[1]; d2 <- dim(list.training[[i]])[2]
-  # This list below will contain the number of cells per column that have problems (NA, etc.).
-  # The first column contains identifiers for the the various observations,
-  # and using it will lead to false predictions. So the first counter is set to d1.
+  d1 <- dim(list.training[[i]])[1];    d2 <- dim(list.training[[i]])[2]
+  # The list "count" below will contain the number of cells per column
+  # that have problems (NA, etc.).
+  # The first column of "complete.data" contains identifiers for the various observations,
+  # and using it will lead to false predictions. So the first counter is set to the maximum,
+  # leading later this variable to be removed.
   count <- rep(x=0,d2);   count[1] <- d1;
   for(k in 2 : d2){
     for(j in 1 : d1)
-      if(is.na(list.training[[i]][j,k]) |
-           list.training[[i]][j,k] %in% c("#DIV/0!",""))
+      if(is.na(list.training[[i]][j,k]) | list.training[[i]][j,k] %in% c("#DIV/0!",""))
           count[k] <- count[k] + 1
   }
   # We select only the columns with less than half of the values missing.
-  good.variables <- count < (d1 * 0.5)
-  # Actually a direct check with th command
+  good.variables <-   count < (d1 * 0.5)
+  # Actually a direct check with the command
   #    print(table(count[good.variables]))
   # proves that the variables that we selected have no missing values, 
   # so there is no need for imputing.
   # We select only the variables of interest.
   list.training[[i]] <- list.training[[i]][,good.variables]
-  # In addition, we need to check for almost zero variability for the remaining variables
+  # In addition, we need to check for almost zero variability in the remaining variables.
   # By construction, the column "user_name" is constant (on each subset with constant "i"),
   # but there could also be other constant or almost constant columns to remove.
-  # The next line proves that actually only such column is constant.
   near.zero.var <- nearZeroVar(list.training[[i]], saveMetrics = TRUE)$nzv
-  # because the only TRUE value is the first one
+  # This vector contains TRUE if the correponding column has near zero variance, FALSE otherwise
+  
+  # If we use the command
+  #   print(table(near.zero.var))
+  # we get a single TRUE VALUE, namely the first one, corresponding to the variable
+  # "user_name", that is constant by construction
+
+  # We remove the (only) variable(s) with almost zero variance.
   list.training[[i]] <- list.training[[i]][,-near.zero.var]
 
-  # We save the list of the variables used for the i-th user
+  # We save the list of the variables used for the i-th user.
   list.variables[[i]] <- colnames(list.training[[i]])
 
   # For later use, we select the same variable also in validating and in testing.
@@ -132,7 +145,7 @@ for(i in seq_along(list.users)){
 ```
 
 A simple check proves that actually we select the same set of (58) variables for the 6 users
-(something that a priori we cannot expecting), but we are not going to use this fact
+(something that a priori we cannot predict). but we are not going to use this fact
 
 ```{r, cache = TRUE, echo = FALSE, message = FALSE}
 c <- ""
@@ -151,11 +164,12 @@ Given the high heterogeneity of the types of the variables in `complete.data`, w
 - 20% used for validating the combination of the previous 3 model,
 - 20% for the testing of the final model.
 
-So divide our training sets in 3 subsets, and we fit a random forest model to each of them.
+So divide our training sets in 3 subsets, and we fit a random forest model to each of them. We opt for using exactly the same parameters for each subset, since already this trivial choice will give a sufficiently high accuracy (see below).
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
+# These contain the fit models for each user, computed on the 3 subsets of training
 list.fit1 <- list();   list.fit2 <- list();   list.fit3 <- list();
-for(i in seq_along(list.users)){
+for(i in seq_along(list.users)){   # Cycle over the 6 users.
   train1 <- createDataPartition(y = list.training[[i]]$classe, p = 1/3, list = FALSE)
   subsets1 <- list.training[[i]][train1,]
   temp <- list.training[[i]][-train1,]
@@ -173,12 +187,12 @@ for(i in seq_along(list.users)){
 
 ## Validating and final model
 
-For each user separately, we use the 3 fit models already created and we combine them, again using random forests. This results in a `combo.model` for each user. At the end, we compute the accuracy for each user individually.
+For each user separately, we use the 3 fit models already created and we combine them, again using random forests. This results in a `combo.model` for each user. At the end, we compute the accuracy for each user individually, using the testing sets (that we did not use until now).
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 combo.model <- list();    accuracy <- rep(NA,length(list.users))
-for(i in seq_along(list.users)){
-  pred1<- predict(list.fit1[[i]], list.validating[[i]])
+for(i in seq_along(list.users)){   # Cycle over the 6 users.
+  pred1<- predict(list.fit1[[i]], list.validating[[i]])   # Cycle over the the 6 users.
   pred2 <- predict(list.fit2[[i]], list.validating[[i]])
   pred3 <- predict(list.fit3[[i]], list.validating[[i]])
   validating.dat <- data.frame(pred1, pred2, pred3, classe = list.validating[[i]]$classe)
@@ -191,24 +205,24 @@ for(i in seq_along(list.users)){
   testing.dat <- data.frame(pred1 = pred.test1, pred2 = pred.test2, pred3 = pred.test3,
                             classe = list.testing[[i]]$classe)
   pred <- predict(combo.model[[i]], newdata = testing.dat)
-  accuracy[i] <- confusionMatrix(pred, list.testing[[i]]$classe)$overall[1]
+  accuracy[i] <- round(confusionMatrix(pred, list.testing[[i]]$classe)$overall[1],3)
 }
 print(t(data.frame(user = 1:length(list.users), accuracy)))
 ```
 
-So the accuracy obtained with out-of-sample is between 0.995 and 1 (depending on the various users). If we consider the 20 observations of the set `partial.data`, then the predicted corrected number of values out of 20:
+So the accuracy obtained with out-of-sample is between 0.995 and 1 (depending on the various users). If we consider the 20 observations of the set `partial.data`, then the predicted number of corrected values out of 20 is:
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 t <- table(partial.data$user_name)
-sum(t*accuracy)
+sum(t * accuracy)
 ```
 
 So we feel confortable enough to predict the 20 values of `classe` out of the data in `partial.data`:
 
 ```{r, cache = TRUE, echo = TRUE, message = FALSE}
 d <- dim(partial.data)[1]
-final.predictions <- rep(NA,d);   v <- c("A","B","C","D","E")
-for( k in 1:d ){
+final.predictions <- rep(NA,d);
+for( k in 1:d ){   # Cycle over each line of "partial data"
   i <- which(list.users == partial.data$user_name[k])
   temp <- partial.data[k,]
   pred.final1 <- predict(list.fit1[[i]], newdata = temp)
@@ -217,8 +231,8 @@ for( k in 1:d ){
   final.data <- data.frame(pred1 = pred.final1, pred2 = pred.final2, pred3 = pred.final3)
   final.predictions[k]  <- predict(combo.model[[i]], newdata = final.data)
 }
-final.predictions <- v[final.predictions];
+ v <- c("A","B","C","D","E");   final.predictions <- v[final.predictions];
 print(t(data.frame(id = 1:d,prediction = final.predictions)))
 ```
 
-This prediction is the correct one: if we insert these results in the final [quiz](https://www.coursera.org/learn/practical-machine-learning/exam/3SSqy/course-project-prediction-quiz), we get 20 correct answers out of 20.
+Actually, this prediction is the correct one: if we insert these results in the final [quiz](https://www.coursera.org/learn/practical-machine-learning/exam/3SSqy/course-project-prediction-quiz) (date of check: 28 Nov. 2016), then we get 20 correct answers out of 20.
