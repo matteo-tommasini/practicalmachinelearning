@@ -159,7 +159,7 @@ library(rattle); library(randomForest)</code></pre>
   paste(list.users[i], &quot; = &quot;, sum(complete.data$user_name == list.users[i]), sep = &quot;&quot;))</code></pre>
 <pre><code>## [1] &quot;carlitos = 3112&quot; &quot;pedro = 2610&quot;    &quot;adelmo = 3892&quot;   &quot;charles = 3536&quot; 
 ## [5] &quot;eurico = 3070&quot;   &quot;jeremy = 3402&quot;</code></pre>
-<p>We can take full advantage of this fact by dividing <code>complete.data</code> into 6 subsets accordind to the various users, and using machine learning on each of these subset individually.</p>
+<p>We can take full advantage of this fact by dividing <code>complete.data</code> into 6 subsets accordind to the various users, and using machine learning on each of these subset individually. In a real case use, we should probably remove some of the initial columns, containing date/time stamps. However, the <a href="https://www.coursera.org/learn/practical-machine-learning/peer/R43St/prediction-assignment-writeup">assignment</a> explicitly says that we are allowed to use any variable to predict with, so in this case there’s no need to remove such columns. In addition, such columns actually turn out to be the best predictors for our models. Probably this is due to the experiment being carried out without no randomization on the outcome (column <code>classe</code>). So the voluntaries where firstly asked to execute the exercise “correctly”, then in any of the “incorrect” positions in a precise order. This translates in the date/time stamps being highly correlated with the outcome.</p>
 <pre class="r"><code>list.complete &lt;- list()
 for(i in seq_along(list.users))
   list.complete[[i]] &lt;- complete.data[complete.data$user_name == list.users[i],]</code></pre>

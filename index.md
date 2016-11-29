@@ -75,7 +75,7 @@ sapply(seq_along(list.users), function(i)
 ## [5] "eurico = 3070"   "jeremy = 3402"
 ```
 
-We can take full advantage of this fact by dividing `complete.data` into 6 subsets accordind to the various users, and using machine learning on each of these subset individually.
+We can take full advantage of this fact by dividing `complete.data` into 6 subsets accordind to the various users, and using machine learning on each of these subset individually. In a real case use, we should probably remove some of the initial columns, containing date/time stamps. However, the [assignment](https://www.coursera.org/learn/practical-machine-learning/peer/R43St/prediction-assignment-writeup) explicitly says that we are allowed to use any variable to predict with, so in this case there's no need to remove such columns. In addition, such columns actually turn out to be the best predictors for our models. Probably this is due to the experiment being carried out without no randomization on the outcome (column `classe`). So the voluntaries where firstly asked to execute the exercise "correctly", then in any of the "incorrect" positions in a precise order. This translates in the date/time stamps being highly correlated with the outcome.
 
 
 ```r
